@@ -118,3 +118,7 @@ required = [
 [[constraint]]
   branch = "master"
   name = "github.com/hashicorp/go-plugin"
+
+[[constraint]]
+  branch = "master"
+  name = "github.com/prometheus/client_golang"

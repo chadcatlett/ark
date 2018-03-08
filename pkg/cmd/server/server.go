@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"io/ioutil"
+	"net/http"
 	"reflect"
 	"sort"
 	"strings"
@@ -28,6 +29,7 @@ import (
 
 	"github.com/heptio/ark/pkg/buildinfo"
 	"github.com/pkg/errors"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
@@ -59,6 +61,7 @@ import (
 	"github.com/heptio/ark/pkg/util/kube"
 	kubeutil "github.com/heptio/ark/pkg/util/kube"
 	"github.com/heptio/ark/pkg/util/logging"
+	arkmetrics "github.com/heptio/ark/pkg/util/metrics"
 )
 
 func NewCommand() *cobra.Command {
@@ -66,6 +69,8 @@ func NewCommand() *cobra.Command {
 		sortedLogLevels = getSortedLogLevels()
 		logLevelFlag    = flag.NewEnum(logrus.InfoLevel.String(), sortedLogLevels...)
 		pluginDir       = "/plugins"
+		metricsEnabled  = false
+		metricsAddress  = ":8085"
 	)
 
 	var command = &cobra.Command{
@@ -102,7 +107,7 @@ func NewCommand() *cobra.Command {
 			}
 			namespace := getServerNamespace(namespaceFlag)
 
-			s, err := newServer(namespace, fmt.Sprintf("%s-%s", c.Parent().Name(), c.Name()), pluginDir, logger)
+			s, err := newServer(namespace, fmt.Sprintf("%s-%s", c.Parent().Name(), c.Name()), pluginDir, logger, metricsEnabled, metricsAddress)
 
 			cmd.CheckError(err)
 
@@ -112,6 +117,8 @@ func NewCommand() *cobra.Command {
 
 	command.Flags().Var(logLevelFlag, "log-level", fmt.Sprintf("the level at which to log. Valid values are %s.", strings.Join(sortedLogLevels, ", ")))
 	command.Flags().StringVar(&pluginDir, "plugin-dir", pluginDir, "directory containing Ark plugins")
+	command.Flags().BoolVar(&metricsEnabled, "metrics-enable", false, "Enable metrics server.")
+	command.Flags().StringVar(&metricsAddress, "metrics-address", metricsAddress, "The address to expose prometheus metrics.")
 
 	return command
 }
@@ -175,9 +182,12 @@ type server struct {
 	cancelFunc            context.CancelFunc
 	logger                logrus.FieldLogger
 	pluginManager         plugin.Manager
+	metricsEnabled        bool
+	metricsAddress        string
+	metricsMux            *http.ServeMux
 }
 
-func newServer(namespace, baseName, pluginDir string, logger *logrus.Logger) (*server, error) {
+func newServer(namespace, baseName, pluginDir string, logger *logrus.Logger, metricsEnabled bool, metricsAddress string) (*server, error) {
 	clientConfig, err := client.Config("", "", baseName)
 	if err != nil {
 		return nil, err
@@ -200,6 +210,8 @@ func newServer(namespace, baseName, pluginDir string, logger *logrus.Logger) (*s
 
 	ctx, cancelFunc := context.WithCancel(context.Background())
 
+	metricsMux := http.NewServeMux()
+	metricsMux.Handle("/metrics", promhttp.Handler())
 	s := &server{
 		namespace:             namespace,
 		kubeClientConfig:      clientConfig,
@@ -208,10 +220,13 @@ func newServer(namespace, baseName, pluginDir string, logger *logrus.Logger) (*s
 		discoveryClient:       arkClient.Discovery(),
 		clientPool:            dynamic.NewDynamicClientPool(clientConfig),
 		sharedInformerFactory: informers.NewFilteredSharedInformerFactory(arkClient, 0, namespace, nil),
-		ctx:           ctx,
-		cancelFunc:    cancelFunc,
-		logger:        logger,
-		pluginManager: pluginManager,
+		ctx:            ctx,
+		cancelFunc:     cancelFunc,
+		logger:         logger,
+		pluginManager:  pluginManager,
+		metricsEnabled: metricsEnabled,
+		metricsAddress: metricsAddress,
+		metricsMux:     metricsMux,
 	}
 
 	return s, nil
@@ -579,6 +594,20 @@ func (s *server) runControllers(config *api.Config) error {
 	// SHARED INFORMERS HAVE TO BE STARTED AFTER ALL CONTROLLERS
 	go s.sharedInformerFactory.Start(ctx.Done())
 
+	if s.metricsEnabled {
+		go func() {
+			err := http.ListenAndServe(s.metricsAddress, s.metricsMux)
+			s.logger.Fatalf("Failed to start metrics: %v", err)
+		}()
+		s.logger.Infof("Prometheus metric endpoint started at %s", s.metricsAddress)
+	}
+	go wait.Until(
+		func() {
+			arkmetrics.IncrementTestCounter(1)
+		},
+		2*time.Second,
+		ctx.Done(),
+	)
 	s.logger.Info("Server started successfully")
 
 	<-ctx.Done()

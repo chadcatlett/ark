@@ -20,15 +20,14 @@ import (
 	"context"
 	"time"
 
-	"github.com/pkg/errors"
-	"github.com/sirupsen/logrus"
-
-	kuberrs "k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/util/wait"
-
 	"github.com/heptio/ark/pkg/cloudprovider"
 	arkv1client "github.com/heptio/ark/pkg/generated/clientset/versioned/typed/ark/v1"
 	"github.com/heptio/ark/pkg/util/kube"
+	arkmetrics "github.com/heptio/ark/pkg/util/metrics"
+	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
+	kuberrs "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/util/wait"
 )
 
 type backupSyncController struct {
@@ -76,6 +75,8 @@ func (c *backupSyncController) run() {
 		return
 	}
 	c.logger.WithField("backupCount", len(backups)).Info("Got backups from object storage")
+
+	arkmetrics.UpdateBackupCount(len(backups))
 
 	for _, cloudBackup := range backups {
 		logContext := c.logger.WithField("backup", kube.NamespaceAndName(cloudBackup))

@@ -49,6 +49,7 @@ import (
 	"github.com/heptio/ark/pkg/util/collections"
 	"github.com/heptio/ark/pkg/util/encode"
 	kubeutil "github.com/heptio/ark/pkg/util/kube"
+	arkmetrics "github.com/heptio/ark/pkg/util/metrics"
 	"github.com/heptio/ark/pkg/util/stringslice"
 )
 
@@ -328,6 +329,9 @@ func (controller *backupController) runBackup(backup *api.Backup, bucket string)
 	log := controller.logger.WithField("backup", kubeutil.NamespaceAndName(backup))
 	log.Info("Starting backup")
 
+	arkmetrics.IncrementBackupsInProgress()
+	defer arkmetrics.DecrementBackupsInProgress()
+
 	logFile, err := ioutil.TempFile("", "")
 	if err != nil {
 		return errors.Wrap(err, "error creating temp file for backup log")
@@ -353,8 +357,8 @@ func (controller *backupController) runBackup(backup *api.Backup, bucket string)
 	// Do the actual backup
 	if err := controller.backupper.Backup(backup, backupFile, logFile, actions); err != nil {
 		errs = append(errs, err)
-
 		backup.Status.Phase = api.BackupPhaseFailed
+		arkmetrics.IncrementBackupsFailed()
 	} else {
 		backup.Status.Phase = api.BackupPhaseCompleted
 	}
