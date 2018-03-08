@@ -67,7 +67,6 @@ func DecrementBackupsInProgress() {
 func IncrementBackupsFailed() {
 	backupsFailed.Inc()
 }
-}
 
 // DecrementBackupsFailed decrements backupsFailed
 func DecrementBackupsFailed() {
