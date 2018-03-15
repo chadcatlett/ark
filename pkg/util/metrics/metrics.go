@@ -28,6 +28,13 @@ var (
 		Help:      "Number of backups in progress",
 	})
 
+	backupsUploaded = prometheus.NewCounter(prometheus.CounterOpts{
+		Namespace: arkNamespace,
+		Subsystem: "backup_service",
+		Name:      "backup_upload_count",
+		Help:      "Number of backups uploaded",
+	})
+
 	testCounter = prometheus.NewCounter(prometheus.CounterOpts{
 		Namespace: arkNamespace,
 		Subsystem: "testSubsystem",
@@ -71,4 +78,9 @@ func IncrementBackupsFailed() {
 // DecrementBackupsFailed decrements backupsFailed
 func DecrementBackupsFailed() {
 	backupsFailed.Dec()
+}
+
+// IncrementBackupsUploaded increments backupsFailed
+func IncrementBackupsUploaded() {
+	backupsUploaded.Inc()
 }

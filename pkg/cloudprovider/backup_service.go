@@ -32,6 +32,7 @@ import (
 
 	api "github.com/heptio/ark/pkg/apis/ark/v1"
 	"github.com/heptio/ark/pkg/generated/clientset/versioned/scheme"
+	arkmetrics "github.com/heptio/ark/pkg/util/metrics"
 )
 
 // BackupService contains methods for working with backups in object storage.
@@ -172,7 +173,7 @@ func (br *backupService) UploadBackup(bucket, backupName string, metadata, backu
 			return kerrors.NewAggregate([]error{err, deleteErr})
 		}
 	}
-
+	arkmetrics.IncrementBackupsUploaded()
 	return nil
 }
 
