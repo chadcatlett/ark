@@ -61,7 +61,6 @@ import (
 	"github.com/heptio/ark/pkg/util/kube"
 	kubeutil "github.com/heptio/ark/pkg/util/kube"
 	"github.com/heptio/ark/pkg/util/logging"
-	arkmetrics "github.com/heptio/ark/pkg/util/metrics"
 )
 
 func NewCommand() *cobra.Command {
@@ -601,13 +600,7 @@ func (s *server) runControllers(config *api.Config) error {
 		}()
 		s.logger.Infof("Prometheus metric endpoint started at %s", s.metricsAddress)
 	}
-	go wait.Until(
-		func() {
-			arkmetrics.IncrementTestCounter(1)
-		},
-		2*time.Second,
-		ctx.Done(),
-	)
+
 	s.logger.Info("Server started successfully")
 
 	<-ctx.Done()

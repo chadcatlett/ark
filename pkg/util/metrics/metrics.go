@@ -34,30 +34,18 @@ var (
 		Name:      "backup_upload_count",
 		Help:      "Number of backups uploaded",
 	})
-
-	testCounter = prometheus.NewCounter(prometheus.CounterOpts{
-		Namespace: arkNamespace,
-		Subsystem: "testSubsystem",
-		Name:      "testCounter",
-		Help:      "my test counter",
-	})
 )
 
 func init() {
 	prometheus.MustRegister(backupCount)
-	prometheus.MustRegister(testCounter)
 	prometheus.MustRegister(backupsInProgress)
 	prometheus.MustRegister(backupsFailed)
+	prometheus.MustRegister(backupsUploaded)
 }
 
 // UpdateUnneededNodesCount records number of currently unneeded nodes
 func UpdateBackupCount(count int) {
 	backupCount.Set(float64(count))
-}
-
-// IncrementTestCounter increments testCounter by incrBy
-func IncrementTestCounter(incrBy int) {
-	testCounter.Add(float64(incrBy))
 }
 
 // IncrementBackupsInProgress increments backupsInProgress
